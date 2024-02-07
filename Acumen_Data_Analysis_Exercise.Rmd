@@ -1,0 +1,358 @@
+---
+title: "Acumen"
+author: "Aung Myo Htut"
+date: "2024-02-01"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#Load the libraries
+library(tidyverse)
+library(readxl)
+library(table1)
+library(naniar)
+library(ggplot2)
+library(openxlsx)
+library(knitr)
+library(ggpubr)
+```
+
+#load the file
+```{r loading}
+setwd("C:/Users/draun/Desktop/Acumen Exercise")
+data <- read_xlsx("Acumen_Data_Analysis_Exercise_Htut_AungMyo.xlsx", sheet = 2)
+data <- data[,1:9]
+dim(data)
+```
+
+#Rename variables
+```{r renaming}
+names(data) <- c("obs_no","qr", "eid", "sex", "race","age","hosp_visit","salary","health_score")
+colnames(data)
+# To know internal structure of dataframe
+str(data)
+```
+
+Question 1: Understanding the data.
+a) Are all the values in the data reasonable? Are there missing values?
+b) What are the characteristics of employees at Company A? Do these demographics change over time?
+Use tables and charts to understand the data and demographic characteristics of employees at Company A. 
+
+#Summary Statistics
+```{r Summary}
+summary(data)
+```
+
+#Missing values
+```{r Missing Values}
+#Total Missing Values
+sum(is.na(data))
+
+#Columns with missing values
+colSums(is.na(data))
+
+#percentage of missing values in the dataframe
+pct_miss(data)
+
+#Percent of rows with any missing values
+pct_miss_case(data)
+
+#Percent of rows that are complete
+pct_complete_case(data)
+
+#Visualizing missing values
+gg_miss_var(data, show_pct = TRUE)
+```
+
+#Factor Variables
+```{r Factoring}
+data$sex <- as.factor(data$sex)
+data$race <- as.factor(data$race)
+data$hosp_visit <- as.factor(data$hosp_visit)
+
+str(data)
+summary(data)
+
+```
+
+#Removing Missing cases
+```{r NAs Omit}
+#Dropping NAs
+comp_data <- data %>% drop_na()
+
+#Recheck missing values
+sum(is.na(comp_data))
+
+#dimension of data
+dim(comp_data)
+```
+
+#Finding and removing outliers in age
+```{r age outliers}
+# Under 18 
+under18 <- comp_data %>% filter(age<18) %>% (n=nrow)
+under18
+
+#Over 65
+over65 <- comp_data %>% filter (age>65) %>% (n=nrow)
+over65
+
+#Removing those with under 18 and over 65
+comp_data <- comp_data %>% filter(age >= 18 & age <= 65)
+dim(comp_data)
+
+```
+
+#Finding and removing outliers in health score
+```{r health score outliers}
+#6 is the highest health score supposed to be in the dataset
+#Over 6 healthscore
+sum(comp_data$health_score >6)
+
+comp_data <- comp_data %>% filter (health_score <=6)
+dim(comp_data)
+```
+
+
+#Table - Overall
+```{r table overall}
+#Overall
+t1 <- table1(~ sex + race + age + hosp_visit + salary + health_score,
+             data =  comp_data,
+             overall = "Total")
+t1
+#write.xlsx(t1,"table1.xlsx")
+```
+
+
+#Histograms
+```{r age, salary and health score}
+age_his <- ggplot(comp_data, aes(x = age)) +
+  geom_histogram(binwidth = 1, color = "black", fill = "white")+
+  geom_vline(aes(xintercept = mean(age)), color = "red", linewidth = 0.8)+
+  geom_vline(aes(xintercept = median(age)), color = "blue", linewidth = 0.8)+
+  xlab("Age of Employees at Company A") +
+  ylab("Count") +
+  ggtitle ("Histogram of Age of Employees at Company A")
+age_his
+#ggsave(filename = "age_his.png", plot = age_his,width = 5, height = 4, units = "in",bg = "white")
+
+salary_his <- ggplot(comp_data, aes(x = salary)) +
+  geom_histogram(bins= 30, color = "black", fill = "white")+
+  geom_vline(aes(xintercept = mean(salary)), color = "red", linewidth = 0.8)+
+  geom_vline(aes(xintercept = median(salary)), color = "blue", linewidth = 0.8, linetype = "dashed")+
+  xlab("Salary of Employees at Company A") +
+  ylab("Count") +
+  ggtitle ("Histogram of Salary of Employees at Company A")
+salary_his
+#ggsave(filename = "salary_his.png", plot = salary_his,width = 5, height = 4, units = "in",bg = "white")
+
+
+healthscore_his <- ggplot(comp_data, aes(x = health_score)) +
+  geom_histogram(bins= 35, color = "black", fill = "white")+
+  geom_vline(aes(xintercept = mean(health_score)), color = "red", linewidth = 0.8)+
+  geom_vline(aes(xintercept = median(health_score)), color = "blue", linewidth = 0.8, linetype = "dashed")+
+  xlab("Health Score of Employees at Company A") +
+  ylab("Count") +
+  ggtitle ("Histogram of Health Score of Employees at Company A")
+healthscore_his
+#ggsave(filename = "healthscore_his.png", plot = healthscore_his,width = 5, height = 4, units = "in",bg = "white")
+```
+
+
+#Demographics change over time
+```{r demo change over time}
+demo_overtime <- comp_data %>%
+  group_by(qr) %>%
+  summarise(mean_age = mean(age),
+            mean_salary = mean(salary),
+            hospvisit_sum = sum(hosp_visit=="1"),
+            mean_hs = mean(health_score))
+demo_overtime
+
+```
+
+
+#Create visualization of Age over time
+```{r Age Over Time}
+aot <- ggplot(data = demo_overtime, aes(x = qr, y = mean_age)) +
+  geom_line(color = "red") +
+  scale_x_continuous(breaks = c(seq(1,12,1))) +
+  labs(title = "Mean Age of Employees Over Time at Company A",
+       y = "Mean Age",
+       x = "Quarter") +
+  theme_bw() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 12))
+aot
+#ggsave(filename = "aot.png", plot = aot,width = 5, height = 4, units = "in",bg = "white")
+```
+
+#Create visualization of Salary over time
+```{r Salary Over Time}
+sot <- ggplot(data = demo_overtime, aes(x = qr, y = mean_salary)) +
+  geom_line(color = "red") +
+  scale_x_continuous(breaks = c(seq(1,12,1))) +
+  labs(title = "Mean Salary of Employees Over Time at Company A",
+       y = "Mean Salary",
+       x = "Quarter") +
+  theme_bw() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 12))
+sot
+#ggsave(filename = "sot.png", plot = sot,width = 5, height = 4, units = "in",bg = "white")
+```
+
+#Create visualization of Hospital Visits over time
+```{r Hospital Visits Over Time}
+hvot <- ggplot(data = demo_overtime, aes(x = qr, y = hospvisit_sum)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = hospvisit_sum), vjust = -0.5, color = "red", size = 3) +
+  scale_x_continuous(breaks = c(seq(1,12,1))) +
+  labs(title = "Hospital Visits of Employees Over Time",
+       y = "Hospital Visits",
+       x = "Quarter") +
+  theme_bw() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 12))
+hvot
+#ggsave(filename = "hvot.png", plot = hvot,width = 5, height = 4, units = "in",bg = "white")
+```
+
+#Health Score Trend Over Time
+```{r health score over time}
+hsot <- ggplot(data = demo_overtime, aes(x = qr, y = mean_hs)) +
+  geom_line(color = "red") +
+  scale_x_continuous(breaks = c(seq(1,12,1))) +
+  labs(title = "Mean Health Score of Employees Over Time at Company A",
+       y = "Mean Health Score",
+       x = "Quarter") +
+  theme_bw() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 12))
+hsot
+#ggsave(filename = "hsot.png", plot = hsot,width = 5, height = 4, units = "in",bg = "white")
+
+```
+
+
+
+Question 2: Exploring Relationships
+a) Which characteristics are associated with the health score? 
+Use tables and charts (suggestion: scatter plots for continuous variables) to determine which characteristics are associated with the health score.
+
+#Normality and Homogeneity Assumption
+```{r}
+library(nortest)
+ad.test(comp_data$health_score)
+ad.test(comp_data$age)
+ad.test(comp_data$salary)
+library(ggpubr)
+ggqqplot(comp_data$health_score, main = "Q-Q Plot for Health Score with 95% Confidence Interval")
+ggqqplot(comp_data$age, main = "Q-Q Plot for Age with 95% Confidence Interval")
+ggqqplot(comp_data$salary, main = "Q-Q Plot for Salary with 95% Confidence Interval")
+library(car)
+leveneTest(health_score ~ sex, data =  comp_data)
+leveneTest(health_score ~ race, data = comp_data)
+```
+
+
+#Sex and Health Score
+```{r sex and health score}
+#Box plot
+sexvshs <- ggplot(comp_data, aes(x = sex, y = health_score, fill = sex)) + 
+  geom_boxplot() +
+  scale_y_continuous(breaks = c(seq(1,6,1)))+
+  labs(title = "Sex vs Health Score",
+       x = "Sex",
+       y = "Health Score")
+sexvshs
+#t.test(health_score ~ sex, data= comp_data)
+wilcox.test(health_score ~ sex, data = comp_data)
+
+#ggsave(filename = "sexvshs.png", plot = sexvshs,width = 5, height = 4, units = "in",bg = "white")
+
+# t2 <- table1 (~ health_score | sex, data = comp_data, overall = "Total")
+# t2
+# file_path <- "C:/Users/draun/Desktop/Acumen Exercise/table1.xlsx"
+# wb <- loadWorkbook(file_path)
+# writeData(wb, sheet = "Sheet2",t2)
+# saveWorkbook(wb,file_path,overwrite = TRUE)
+```
+
+#Race and Health Score
+```{r Race vs Health Score}
+racevshs <- ggplot(comp_data, aes(x = race, y = health_score, fill = race)) + 
+  geom_boxplot() +
+  scale_y_continuous(breaks = c(seq(1,6,1))) +
+  labs(title = "Race vs Health Score",
+       x = "Race",
+       y = "Health Score")
+racevshs
+result <- aov(health_score ~ race, data = comp_data)
+summary(result)
+kruskal.test(health_score ~ race, data = comp_data)
+
+#ggsave(filename = "racevshs.png", plot = racevshs,width = 5, height = 4, units = "in",bg = "white")
+
+# t3 <- table1 (~ health_score | race, data = comp_data, overall = "Total")
+# t3
+# file_path <- "C:/Users/draun/Desktop/Acumen Exercise/table1.xlsx"
+# wb <- loadWorkbook(file_path)
+# writeData(wb, sheet = "Sheet3",t3)
+# saveWorkbook(wb,file_path,overwrite = TRUE)
+```
+
+
+# Age and Health Score
+```{r age vs health score}
+agevshs <- ggplot(comp_data, aes(x = age, y = health_score)) +
+  geom_point(color = "blue", size = 1.5, alpha = 0.3) +
+  geom_smooth(method = lm, se = FALSE, color = "red") +
+  scale_x_continuous(breaks = c(seq(15,70,5))) +
+  scale_y_continuous(breaks = c(seq(1,6,1))) +
+  labs(title = "Age vs Health Score",
+       x = "Age",
+       y = "Health Score") 
+agevshs
+cor.test(comp_data$age, comp_data$health_score, method = "spearman")
+#ggsave(filename = "agevshs.png", plot = agevshs,width = 5, height = 4, units = "in",bg = "white")
+  
+```
+
+#Hosptal Visit vs Health Score
+```{r Hosp Visit vs Health Score}
+hvvshs <- ggplot(comp_data, aes(x = hosp_visit, y = health_score, fill = hosp_visit)) + 
+  geom_boxplot() +
+  scale_y_continuous(breaks = c(seq(1,6,1)))+
+  labs(title = "Hospital Visit vs Health Score",
+       x = "Hospital Visit",
+       y = "Health Score")
+hvvshs
+wilcox.test(health_score ~ hosp_visit, data = comp_data)
+#ggsave(filename = "hvvshs.png", plot = hvvshs,width = 5, height = 4, units = "in",bg = "white")
+
+# t4 <- table1 (~ health_score | hosp_visit, data = comp_data, overall = "Total")
+# t4
+# file_path <- "C:/Users/draun/Desktop/Acumen Exercise/table1.xlsx"
+# wb <- loadWorkbook(file_path)
+# writeData(wb, sheet = "Sheet4",t4)
+# saveWorkbook(wb,file_path,overwrite = TRUE)
+```
+
+#Salary vs Health Score
+```{r Salary vs Health Score}
+salaryvshs <- ggplot(comp_data, aes(x = salary, y = health_score)) +
+  geom_point(color = "blue", size = 1.5, alpha = 0.3) +
+  geom_smooth(method = lm, se = FALSE, color = "red") +
+  scale_y_continuous(breaks = c(seq(1,6,1))) +
+  labs(title = "Salary vs Health Score",
+       x = "Salary",
+       y = "Health Score") 
+salaryvshs
+#ggsave(filename = "salaryvshs.png", plot = salaryvshs,width = 5, height = 4, units = "in",bg = "white")
+
+cor.test(comp_data$salary, comp_data$health_score)
+```
+
+
+
